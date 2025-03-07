@@ -6,16 +6,39 @@ function getAuditLogs() {
     $jsonData = @file_get_contents(FIREBASE_URL);
 
     if ($jsonData === false) {
-        return null; 
+        return [];
     }
 
     $decodedData = json_decode($jsonData, true);
 
     if (!is_array($decodedData)) {
-        return null;
+        return [];
     }
 
-    return $decodedData; 
+    $flattenedLogs = [];
+
+    // Flatten logs to sort by timestamp
+    foreach ($decodedData as $userId => $logs) {
+        if (is_array($logs)) {
+            foreach ($logs as $logId => $log) {
+                if (isset($log['timestamp'])) {
+                    $flattenedLogs[] = [
+                        'userId' => $userId,
+                        'action' => $log['action'] ?? 'Unknown Action',
+                        'details' => $log['details'] ?? 'No Details',
+                        'timestamp' => (int) $log['timestamp'],
+                    ];
+                }
+            }
+        }
+    }
+
+    // Sort logs by timestamp (oldest first)
+    usort($flattenedLogs, function ($a, $b) {
+        return $a['timestamp'] <=> $b['timestamp'];
+    });
+
+    return $flattenedLogs;
 }
 
 $auditLogs = getAuditLogs();
@@ -36,7 +59,7 @@ $auditLogs = getAuditLogs();
 </head>
 <body>
 
-    <h2>Audit Trail Logs</h2>
+    <h2>Audit Trail Logs (Oldest First)</h2>
     <table>
         <thead>
             <tr>
@@ -48,17 +71,13 @@ $auditLogs = getAuditLogs();
         </thead>
         <tbody>
             <?php if (!empty($auditLogs)): ?>
-                <?php foreach ($auditLogs as $userId => $logs): ?>
-                    <?php if (is_array($logs)): ?>
-                        <?php foreach ($logs as $logId => $log): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($userId) ?></td>
-                                <td><?= htmlspecialchars($log['action'] ?? 'Unknown Action') ?></td>
-                                <td><?= htmlspecialchars($log['details'] ?? 'No Details') ?></td>
-                                <td><?= isset($log['timestamp']) ? date("Y-m-d H:i:s", (int)($log['timestamp'] / 1000)) : 'No Timestamp' ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                <?php foreach ($auditLogs as $log): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($log['userId']) ?></td>
+                        <td><?= htmlspecialchars($log['action']) ?></td>
+                        <td><?= htmlspecialchars($log['details']) ?></td>
+                        <td><?= date("Y-m-d H:i:s", (int)($log['timestamp'] / 1000)) ?></td>
+                    </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr><td colspan="4">No logs found.</td></tr>
